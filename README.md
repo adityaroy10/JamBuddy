@@ -1,6 +1,6 @@
 # JamBuddy — AI Guitar Accompaniment
 
-Audio-in, audio-out AI guitar accompaniment: play solos and get backing + support lines, or play chords and get AI fills, or set chords+vibe and get full backing. **JamBuddy.ai**
+Audio-in, audio-out AI guitar accompaniment: play solos and get backing + support lines, or play chords and get AI fills, or set chords+vibe and get full backing. 
 
 ## Quick start
 
