@@ -22,11 +22,21 @@ def main():
 
     root = tk.Tk()
     root.title("JamBuddy — AI Guitar Accompaniment")
-    root.geometry("420x280")
+    root.geometry("420x340")
     root.resizable(True, True)
 
     pipeline: Pipeline = None
     stream: AudioStream = None
+
+    def on_monitor_change(v):
+        nonlocal pipeline
+        if pipeline is not None:
+            pipeline.set_monitor_level(float(v) / 100.0)
+
+    def on_backing_change(v):
+        nonlocal pipeline
+        if pipeline is not None:
+            pipeline.set_backing_level(float(v) / 100.0)
 
     def on_mode_change():
         nonlocal pipeline
@@ -49,6 +59,12 @@ def main():
             lbl_status.config(text="No SoundFont found. Install FluidSynth and add a .sf2 file.")
             return
         pipeline = Pipeline(sample_rate=SAMPLE_RATE, block_size=BUFFER_SIZE, mode=mode_var.get())
+        pipeline.set_monitor_level(monitor_var.get() / 100.0)
+        pipeline.set_backing_level(backing_var.get() / 100.0)
+        try:
+            pipeline.renderer.check_backing()
+        except (FileNotFoundError, OSError):
+            pass  # backing_available stays False; status will show "no backing"
         stream = AudioStream(
             sample_rate=SAMPLE_RATE,
             block_size=BUFFER_SIZE,
@@ -56,7 +72,10 @@ def main():
         )
         stream.start()
         btn_start.config(text="Stop")
-        lbl_status.config(text=f"Running — Mode: {mode_var.get()}")
+        status = f"Running — Mode: {mode_var.get()}"
+        if not pipeline.renderer.backing_available:
+            status += " (no backing: add FluidSynth bin to PATH)"
+        lbl_status.config(text=status)
 
     # Mode selection (both A and B)
     ttk.Label(root, text="Mode", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=12, pady=(12, 4))
@@ -71,12 +90,26 @@ def main():
         rb.pack(anchor="w", padx=24, pady=2)
     ttk.Separator(root, orient="horizontal").pack(fill="x", padx=12, pady=8)
 
+    # Monitor (dry) and Backing (wet) levels
+    mix_frame = ttk.Frame(root, padding=(12, 0))
+    mix_frame.pack(fill="x", pady=4)
+    ttk.Label(mix_frame, text="Monitor (your guitar)", font=("Segoe UI", 9)).pack(anchor="w")
+    monitor_var = tk.DoubleVar(value=90.0)
+    monitor_scale = ttk.Scale(mix_frame, from_=0, to=100, variable=monitor_var, orient="horizontal", length=200, command=on_monitor_change)
+    monitor_scale.pack(anchor="w", pady=(0, 4))
+    ttk.Label(mix_frame, text="Backing (accompaniment)", font=("Segoe UI", 9)).pack(anchor="w")
+    backing_var = tk.DoubleVar(value=50.0)
+    backing_scale = ttk.Scale(mix_frame, from_=0, to=100, variable=backing_var, orient="horizontal", length=200, command=on_backing_change)
+    backing_scale.pack(anchor="w", pady=(0, 8))
+
+    ttk.Separator(root, orient="horizontal").pack(fill="x", padx=12, pady=4)
+
     btn_start = ttk.Button(root, text="Start", command=start_stop)
     btn_start.pack(pady=8)
     lbl_status = ttk.Label(root, text="Choose mode and click Start. Guitar in → audio out.")
     lbl_status.pack(pady=4)
 
-    ttk.Label(root, text="Audio: default input/output devices. Buffer size 256.", font=("Segoe UI", 8), foreground="gray").pack(pady=8)
+    ttk.Label(root, text="Audio: default input/output. Buffer 512. Set monitor 0% to hear only backing.", font=("Segoe UI", 8), foreground="gray").pack(pady=8)
     root.mainloop()
 
 

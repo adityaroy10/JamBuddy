@@ -15,11 +15,15 @@ cd JamBuddy
 
 ## 2. Python environment
 
-You need **Python 3.10 or newer**. Check with:
+You need **Python 3.10, 3.11, or 3.12**. (Python 3.14 is too new — most scientific packages don’t have pre-built wheels yet, so `pip install` will try to build from source and fail.)
+
+Check your version:
 
 ```powershell
 python --version
 ```
+
+If you see 3.14 or higher, install Python 3.12 from [python.org](https://www.python.org/downloads/) (or use [pyenv](https://github.com/pyenv/pyenv-win) / [conda](https://docs.conda.io/) and create an environment with 3.12).
 
 Create and activate a virtual environment:
 
@@ -76,6 +80,8 @@ Then either:
   SOUNDFONT_PATH = Path(r"C:\path\to\your\FluidR3_GM.sf2")
   ```
 
+**Note:** If you run the `fluidsynth` command in a terminal you may see errors about `C:\ProgramData\soundfonts\default.sf2` or "MIDI in devices". That is the **standalone** FluidSynth CLI; JamBuddy uses the SoundFont in `soundfonts/FluidR3_GM.sf2` and drives the synth from the app (no MIDI input needed). You can ignore those messages when running `python run.py`.
+
 ---
 
 ## 5. Run the app
@@ -93,6 +99,35 @@ guitar-accompaniment
 ```
 
 Choose a mode, click **Start**, and set your system audio so the guitar input is the default microphone (or your interface) and output goes to your speakers or headphones.
+
+---
+
+## 6. (Optional) AI chord accompaniment (ReaLchords)
+
+By default, chord backing is **rule-based**. For **AI chord backing** (ReaLchords):
+
+**If `pip install realjam` fails with "onnxruntime ... no matching distributions" or "ResolutionImpossible":** your venv is **Python 3.14** (pip may show `cp314` in the error). realjam needs **Python 3.10, 3.11, or 3.12** because `onnxruntime` has no wheel for 3.14. You must recreate the venv with 3.12:
+
+1. **Install Python 3.12** if needed: [python.org/downloads](https://www.python.org/downloads/) — get 3.12.x (not 3.14).
+2. **Recreate the venv** from the project root:
+   ```powershell
+   cd D:\USC\Buddy
+   Remove-Item -Recurse -Force .venv
+   py -3.12 -m venv .venv
+   ```
+   If `py -3.12` is not found, use the full path to Python 3.12, e.g. `C:\Python312\python.exe -m venv .venv`.
+3. **Activate and install**:
+   ```powershell
+   .venv\Scripts\activate
+   python --version   # must show 3.12.x
+   pip install -r requirements.txt
+   pip install realjam
+   ```
+4. In **another terminal** (same venv activated), start the realjam server:
+   ```powershell
+   realjam-start-server
+   ```
+5. Run JamBuddy as usual. With the server running, the app uses ReaLchords for backing; otherwise it falls back to rule-based chords.
 
 ---
 

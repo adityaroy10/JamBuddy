@@ -25,7 +25,8 @@ class FluidSynthRender:
             return True
         try:
             import fluidsynth
-        except ImportError:
+        except (ImportError, FileNotFoundError, OSError):
+            # ImportError = no module; FileNotFoundError/OSError = fluidsynth adds C:\tools\fluidsynth\bin and path missing
             return False
         if not self.soundfont_path or not Path(self.soundfont_path).exists():
             return False
@@ -33,8 +34,8 @@ class FluidSynthRender:
             self._fs = fluidsynth.Synth(samplerate=float(self.sample_rate))
             self._fs.start()
             sfid = self._fs.sfload(str(self.soundfont_path))
-            self._fs.program_select(0, sfid, 0, 0)   # channel 0, bank 0, preset 0 (usually piano)
-            self._fs.program_select(1, sfid, 0, 48)   # channel 1, e.g. strings or pad for backing
+            self._fs.program_select(0, sfid, 0, 0)   # channel 0, bank 0, preset 0 (piano)
+            self._fs.program_select(1, sfid, 0, 49)   # channel 1: 49 = Slow Strings (smoother than 48)
             self._ready = True
             return True
         except Exception:
@@ -48,66 +49,78 @@ class FluidSynthRender:
         tempo: float,
     ) -> np.ndarray:
         """Render backing + lines events to a float32 mono array. duration_16ths = length in 16th notes."""
-        if not self._init_synth():
-            return np.zeros(int(self.sample_rate * 0.1), dtype=np.float32)  # 100ms silence
+        try:
+            if not self._init_synth():
+                return np.zeros(int(self.sample_rate * 0.1), dtype=np.float32)  # 100ms silence
 
-        # Convert 16ths to seconds: 1 beat = 4 * 16th, so 16th_dur_sec = 60/(tempo*4)
-        sixteenth_sec = 60.0 / (tempo * 4.0)
-        total_sec = duration_16ths * sixteenth_sec
-        n_samples = int(total_sec * self.sample_rate)
-        if n_samples <= 0:
-            n_samples = int(0.1 * self.sample_rate)
+            # Convert 16ths to seconds: 1 beat = 4 * 16th, so 16th_dur_sec = 60/(tempo*4)
+            sixteenth_sec = 60.0 / (tempo * 4.0)
+            total_sec = duration_16ths * sixteenth_sec
+            n_samples = int(total_sec * self.sample_rate)
+            if n_samples <= 0:
+                n_samples = int(0.1 * self.sample_rate)
 
-        # FluidSynth doesn't give us a simple "render N seconds" API easily; we generate in small chunks
-        # For simplicity: render one chunk per 16th note and concatenate
-        chunk_16ths = 1.0
-        chunk_sec = chunk_16ths * sixteenth_sec
-        chunk_samples = int(chunk_sec * self.sample_rate)
-        out = np.zeros(n_samples, dtype=np.float32)
+            # FluidSynth doesn't give us a simple "render N seconds" API easily; we generate in small chunks
+            chunk_16ths = 1.0
+            chunk_sec = chunk_16ths * sixteenth_sec
+            out = np.zeros(n_samples, dtype=np.float32)
 
-        t_16th = 0.0
-        for note, vel, dur in backing_events:
-            start_s = t_16th * sixteenth_sec
-            end_s = (t_16th + dur) * sixteenth_sec
-            self._fs.noteon(1, note, vel)  # channel 1 = backing
-            ns = int((end_s - start_s) * self.sample_rate)
-            if ns > 0:
-                buf = self._fs.get_samples(ns)  # ns = stereo frames, returns 2*ns int16
-                if buf is not None and len(buf) > 0:
-                    if hasattr(buf, 'dtype'):
-                        buf = buf.astype(np.float32) / 32768.0
-                    else:
-                        buf = np.frombuffer(buf, dtype=np.int16).astype(np.float32) / 32768.0
-                    if len(buf) >= 2:
-                        buf = (buf[::2] + buf[1::2]) / 2  # stereo to mono
-                    start_idx = int(start_s * self.sample_rate)
-                    end_idx = min(start_idx + len(buf), n_samples)
-                    if start_idx < len(out) and end_idx > start_idx:
-                        out[start_idx:end_idx] += buf[: end_idx - start_idx]
-            self._fs.noteoff(1, note)
-            t_16th += max(dur, 0.25)
+            # Backing: play as block chord (all notes on together) so it sounds full, not arpeggio
+            if backing_events:
+                chord_dur_16ths = max(dur for _, _, dur in backing_events) if backing_events else 2.0
+                chord_sec = chord_dur_16ths * sixteenth_sec
+                for note, vel, dur in backing_events:
+                    self._fs.noteon(1, note, vel)
+                ns = int(chord_sec * self.sample_rate)
+                if ns > 0:
+                    buf = self._fs.get_samples(ns)
+                    if buf is not None and len(buf) > 0:
+                        if hasattr(buf, 'dtype'):
+                            buf = buf.astype(np.float32) / 32768.0
+                        else:
+                            buf = np.frombuffer(buf, dtype=np.int16).astype(np.float32) / 32768.0
+                        if len(buf) >= 2:
+                            buf = (buf[::2] + buf[1::2]) / 2  # stereo to mono
+                        end_idx = min(len(buf), n_samples)
+                        out[:end_idx] += buf[:end_idx]
+                for note, vel, dur in backing_events:
+                    self._fs.noteoff(1, note)
 
-        for note, vel, dur in lines_events:
-            start_s = 0.0  # simple: start at 0 for lines in this chunk
-            end_s = dur * sixteenth_sec
-            self._fs.noteon(0, note, vel)  # channel 0 = lines
-            ns = int(end_s * self.sample_rate)
-            if ns > 0:
-                buf = self._fs.get_samples(ns)
-                if buf is not None and len(buf) > 0:
-                    if hasattr(buf, 'dtype'):
-                        buf = buf.astype(np.float32) / 32768.0
-                    else:
-                        buf = np.frombuffer(buf, dtype=np.int16).astype(np.float32) / 32768.0
-                    if len(buf) >= 2:
-                        buf = (buf[::2] + buf[1::2]) / 2
-                    end_idx = min(len(buf), n_samples)
-                    out[:end_idx] += buf[:end_idx] * 0.7  # mix lines slightly lower
-            self._fs.noteoff(0, note)
+            t_16th = chord_dur_16ths if backing_events else 0.0
 
-        # Clip to avoid overflow
-        out = np.clip(out, -1.0, 1.0)
-        return out
+            # Lines: render each note (melody/fills)
+            for note, vel, dur in lines_events:
+                start_s = 0.0  # simple: start at 0 for lines in this chunk
+                end_s = dur * sixteenth_sec
+                self._fs.noteon(0, note, vel)  # channel 0 = lines
+                ns = int(end_s * self.sample_rate)
+                if ns > 0:
+                    buf = self._fs.get_samples(ns)
+                    if buf is not None and len(buf) > 0:
+                        if hasattr(buf, 'dtype'):
+                            buf = buf.astype(np.float32) / 32768.0
+                        else:
+                            buf = np.frombuffer(buf, dtype=np.int16).astype(np.float32) / 32768.0
+                        if len(buf) >= 2:
+                            buf = (buf[::2] + buf[1::2]) / 2
+                        end_idx = min(len(buf), n_samples)
+                        out[:end_idx] += buf[:end_idx] * 0.7  # mix lines slightly lower
+                self._fs.noteoff(0, note)
+
+            out = np.clip(out, -1.0, 1.0)
+            return out
+        except OSError:
+            # FluidSynth DLL/path not found (e.g. C:\tools\fluidsynth\bin) or similar
+            self._ready = False
+            if self._fs is not None:
+                try:
+                    self._fs.delete()
+                except Exception:
+                    pass
+                self._fs = None
+            return np.zeros(int(self.sample_rate * 0.1), dtype=np.float32)
+        except Exception:
+            return np.zeros(int(self.sample_rate * 0.1), dtype=np.float32)
 
     def get_silence(self, num_samples: int) -> np.ndarray:
         return np.zeros(num_samples, dtype=np.float32)
@@ -120,3 +133,10 @@ class FluidSynthRender:
                 pass
             self._fs = None
         self._ready = False
+
+    @property
+    def backing_available(self) -> bool:
+        return self._ready
+
+    def check_backing(self) -> bool:
+        return self._init_synth()

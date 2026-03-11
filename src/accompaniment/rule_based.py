@@ -2,6 +2,7 @@
 Rule-based accompaniment: chord -> block chords or simple pattern.
 Same interface as future realjam adapter: config selects backend.
 """
+import random
 from typing import List, Tuple
 
 from .interface import AccompanimentInterface, ChordEvent
@@ -39,11 +40,15 @@ def _chord_notes(chord: str) -> List[int]:
 
 
 class RuleBasedAccompaniment(AccompanimentInterface):
-    """Simple block chords on beat; one chord per beat, 2-beat duration."""
+    """Block chords with light humanization: varied velocity, longer sustain."""
 
     def generate(self, chord: str, tempo: float, melody_notes: List[int], beat_position: float) -> List[ChordEvent]:
         notes = _chord_notes(chord)
-        # One chord per beat, duration 2 16ths (staccato feel)
-        velocity = 80
-        duration_16ths = 2.0
-        return [(n, velocity, duration_16ths) for n in notes]
+        # Sustain chord for one beat (4 16ths) so it blends; slight velocity variation per note (less robotic)
+        base_vel = 72
+        vel_range = 8   # e.g. 68–80
+        duration_16ths = 4.0
+        return [
+            (n, base_vel + random.randint(-vel_range, vel_range), duration_16ths)
+            for n in notes
+        ]

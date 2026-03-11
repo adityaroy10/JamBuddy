@@ -8,12 +8,16 @@ from typing import Optional
 
 # Audio (Option A: 256 samples for latency vs robustness)
 SAMPLE_RATE = 44100
-BUFFER_SIZE = 256  # reduce to 128 if no dropouts
+BUFFER_SIZE = 512  # 256 was causing underflows when perception+render run in callback; 512 gives more headroom
 INPUT_DEVICE: Optional[int] = None  # None = default
 OUTPUT_DEVICE: Optional[int] = None  # None = default
 
+# Input gate: below this RMS (0.0–1.0) we treat as silence — no backing, no dry (reduces notes-on-silence and hiss)
+INPUT_GATE_THRESHOLD = 0.01  # raise if backing still triggers on silence; lower if quiet playing is cut off
+
 # Backends (easy to swap for training later)
-ACCOMPANIMENT_BACKEND = "rule_based"  # "rule_based" | "realjam"
+# Use "realjam" for AI chords (ReaLchords); run realjam-start-server in another terminal. Falls back to rule-based if server unavailable.
+ACCOMPANIMENT_BACKEND = "realjam"  # "rule_based" | "realjam"
 LINES_BACKEND = "rule_based"         # "rule_based" | "magenta"
 PERCEPTION_BACKEND = "lightweight"   # "lightweight" | "trained"
 

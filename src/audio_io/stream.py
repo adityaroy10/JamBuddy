@@ -62,15 +62,17 @@ class AudioStream:
     def start(self) -> None:
         if self._stream is not None:
             return
-        self._stream = sd.Stream(
+        # sounddevice.Stream uses "device" (single or pair), not input_device/output_device
+        stream_kw = dict(
             samplerate=self.sample_rate,
             blocksize=self.block_size,
             dtype=np.float32,
             channels=1,
-            input_device=self.input_device,
-            output_device=self.output_device,
             callback=self._audio_callback,
         )
+        if self.input_device is not None or self.output_device is not None:
+            stream_kw["device"] = (self.input_device, self.output_device)
+        self._stream = sd.Stream(**stream_kw)
         self._stream.start()
         self._running = True
 

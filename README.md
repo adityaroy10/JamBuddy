@@ -49,11 +49,21 @@ Audio-in, audio-out AI guitar accompaniment: play solos and get backing + suppor
 
    Connect your guitar (mic or DI) as the default input device and speakers/headphones as output. Audio in → accompaniment mixed with dry guitar → audio out.
 
+### AI chord accompaniment (ReaLchords)
+
+By default the app uses **rule-based** chords (no AI) unless the **realjam** server is running. For **AI chord backing** (ReaLchords):
+
+1. Install realjam: `pip install realjam` (requires Python 3.10–3.12; optional dependency).
+2. In a **separate terminal**, start the realjam server: `realjam-start-server` (listens on http://127.0.0.1:8080).
+3. Run JamBuddy as usual (`python run.py`). The app will send your melody to the server and use the returned chords for backing. If the server is not running, backing falls back to rule-based chords.
+
+**Lines** (fills/licks) are still rule-based; Magenta or a trained lines model can be added later.
+
 ## Project layout
 
 - `src/config.py` — Sample rate, buffer size, backend names (easy to add training later).
 - `src/perception` — Audio → symbolic (chords, melody, beat). Implementations: `lightweight` (librosa); training = new backend.
-- `src/accompaniment` — Symbolic → backing chords. Implementations: `rule_based`; later `realjam` adapter.
+- `src/accompaniment` — Symbolic → backing chords. **AI**: `realjam` (ReaLchords) when the realjam server is running; **fallback**: `rule_based`.
 - `src/lines` — Symbolic → fills/support lines. Implementations: `rule_based`; later Magenta/trained.
 - `src/render` — MIDI → audio via FluidSynth.
 - `src/audio_io` — sounddevice in/out.
