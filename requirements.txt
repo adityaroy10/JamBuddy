@@ -1,0 +1,9 @@
+# AI Guitar Accompaniment - core deps (no training)
+numpy>=1.23,<2.0
+scipy>=1.10
+sounddevice>=0.4.6
+librosa>=0.10
+pyfluidsynth>=1.3
+mido>=1.3
+# Optional: realjam for ReaLchords backing (pip install realjam separately)
+# realjam>=1.0  # Uncomment when using realjam adapter
