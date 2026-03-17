@@ -13,9 +13,9 @@ class AccompanimentInterface(ABC):
     """Symbolic input -> chord/backing MIDI events."""
 
     @abstractmethod
-    def generate(self, chord: str, tempo: float, melody_notes: List[int], beat_position: float) -> List[ChordEvent]:
+    def generate(self, chord: str, tempo: float, melody_notes: List[int], beat_position: float, intensity: float = 0.5) -> List[ChordEvent]:
         """Generate backing chord events (e.g. for current beat). Returns list of (midi_note, velocity, duration_16ths)."""
-        pass
+        return []
 
     def reset(self) -> None:
         """Reset state for new phrase/song."""

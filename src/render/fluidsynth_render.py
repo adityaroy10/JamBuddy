@@ -34,8 +34,8 @@ class FluidSynthRender:
             self._fs = fluidsynth.Synth(samplerate=float(self.sample_rate))
             self._fs.start()
             sfid = self._fs.sfload(str(self.soundfont_path))
-            self._fs.program_select(0, sfid, 0, 0)   # channel 0, bank 0, preset 0 (piano)
-            self._fs.program_select(1, sfid, 0, 49)   # channel 1: 49 = Slow Strings (smoother than 48)
+            self._fs.program_select(0, sfid, 0, 89)   # channel 0, bank 0, preset 89 (Warm Pad)
+            self._fs.program_select(1, sfid, 0, 95)   # channel 1: 95 = Sweep Pad (ethereal smooth)
             self._ready = True
             return True
         except Exception:
@@ -75,12 +75,13 @@ class FluidSynthRender:
                 if ns > 0:
                     buf = self._fs.get_samples(ns)
                     if buf is not None and len(buf) > 0:
-                        if hasattr(buf, 'dtype'):
-                            buf = buf.astype(np.float32) / 32768.0
+                        if hasattr(buf, 'dtype') and buf.dtype == np.float32:
+                            buf = buf
                         else:
-                            buf = np.frombuffer(buf, dtype=np.int16).astype(np.float32) / 32768.0
+                            # FluidSynth returns int16 memoryview/array.array which needs special buffer from string logic
+                            buf = np.frombuffer(memoryview(buf), dtype=np.int16).astype(np.float32) / 32768.0
                         if len(buf) >= 2:
-                            buf = (buf[::2] + buf[1::2]) / 2  # stereo to mono
+                            buf = (buf[::2] + buf[1::2]) * 0.5  # stereo to mono
                         end_idx = min(len(buf), n_samples)
                         out[:end_idx] += buf[:end_idx]
                 for note, vel, dur in backing_events:
@@ -97,12 +98,12 @@ class FluidSynthRender:
                 if ns > 0:
                     buf = self._fs.get_samples(ns)
                     if buf is not None and len(buf) > 0:
-                        if hasattr(buf, 'dtype'):
-                            buf = buf.astype(np.float32) / 32768.0
+                        if hasattr(buf, 'dtype') and buf.dtype == np.float32:
+                            buf = buf
                         else:
-                            buf = np.frombuffer(buf, dtype=np.int16).astype(np.float32) / 32768.0
+                            buf = np.frombuffer(memoryview(buf), dtype=np.int16).astype(np.float32) / 32768.0
                         if len(buf) >= 2:
-                            buf = (buf[::2] + buf[1::2]) / 2
+                            buf = (buf[::2] + buf[1::2]) * 0.5
                         end_idx = min(len(buf), n_samples)
                         out[:end_idx] += buf[:end_idx] * 0.7  # mix lines slightly lower
                 self._fs.noteoff(0, note)

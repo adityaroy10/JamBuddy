@@ -20,6 +20,8 @@ class SymbolicStream:
     tempo: float = 120.0
     # Confidence 0..1 for chord
     chord_confidence: float = 1.0
+    # Dynamic intensity derived from input volume (0.0 to 1.0+)
+    intensity: float = 0.5
 
 
 class PerceptionInterface(ABC):
@@ -28,7 +30,7 @@ class PerceptionInterface(ABC):
     @abstractmethod
     def process(self, audio_chunk: bytes, sample_rate: int) -> SymbolicStream:
         """Process one chunk of audio; return current symbolic state."""
-        pass
+        return SymbolicStream()
 
     @abstractmethod
     def reset(self) -> None:

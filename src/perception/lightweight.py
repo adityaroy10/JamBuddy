@@ -48,6 +48,11 @@ class LightweightPerception(PerceptionInterface):
                 return SymbolicStream(chord=self._last_chord, tempo=self._last_tempo)
 
             y_block = y_block[:min_len * 2]  # cap for speed
+            
+            # Extract RMS intensity
+            rms_val = float(np.sqrt(np.mean(y_block**2)))
+            # Map typical RMS ranges (e.g. 0.01 to 0.2) to an intensity of 0.0 to 1.0
+            intensity = max(0.0, min(1.0, (rms_val - 0.01) * 8.0))
 
             # Tempo/beat
             try:
@@ -100,6 +105,7 @@ class LightweightPerception(PerceptionInterface):
                 beat_position=0.0,
                 tempo=self._last_tempo,
                 chord_confidence=0.7,
+                intensity=intensity,
             )
 
     def reset(self) -> None:

@@ -33,10 +33,16 @@ class Pipeline:
         self.mode = mode
         self.dry_gain = 0.9
         self.wet_gain = 0.5
+        
+        self.manual_chords: list = []
+        self.use_manual: bool = False
 
         self.perception = LightweightPerception(sample_rate=sample_rate)
         if ACCOMPANIMENT_BACKEND == "realjam" and RealJamAccompaniment is not None:
             self.accompaniment = RealJamAccompaniment()
+        elif ACCOMPANIMENT_BACKEND == "markov":
+            from src.accompaniment.markov_ai import MarkovAccompaniment
+            self.accompaniment = MarkovAccompaniment()
         else:
             self.accompaniment = RuleBasedAccompaniment()
         self.lines_gen = RuleBasedLines()
@@ -82,6 +88,14 @@ class Pipeline:
         self.accompaniment.reset()
         self.lines_gen.reset()
 
+    def set_manual_chords(self, chord_string: str) -> None:
+        """Parse manual chord string like 'C, Am, F, G' and enable manual mode."""
+        self.use_manual = bool(chord_string.strip())
+        if self.use_manual:
+            self.manual_chords = [c.strip() for c in chord_string.replace("-", ",").split(",") if c.strip()]
+        else:
+            self.manual_chords = []
+
     def set_monitor_level(self, level: float) -> None:
         """Set dry (monitor) level 0.0–1.0. 0 = mute your guitar in the mix."""
         self.dry_gain = max(0.0, min(1.0, level))
@@ -97,6 +111,14 @@ class Pipeline:
             return s or SymbolicStream()
         raw = (np.clip(audio_float, -1, 1) * 32767).astype(np.int16).tobytes()
         stream = self.perception.process(raw, self.sample_rate)
+        
+        if self.use_manual and self.manual_chords:
+            # Override AI thought stream with manual progression
+            # Let's say we switch every 4 beats (1 bar)
+            bars = int(stream.beat_position // 4)
+            chord_idx = bars % len(self.manual_chords)
+            stream.chord = self.manual_chords[chord_idx]
+            
         with self._lock:
             self._symbolic = stream
         return stream
@@ -104,23 +126,14 @@ class Pipeline:
     def _generate_and_render(self, stream: SymbolicStream) -> None:
         backing: list = []
         lines: list = []
-        if self.mode == MODE_A_SOLO:
+        if self.mode == MODE_A_SOLO or self.mode == MODE_B_VIBE:
             backing = self.accompaniment.generate(
-                stream.chord, stream.tempo, stream.melody_notes, stream.beat_position
-            )
-            lines = self.lines_gen.generate(
-                stream.chord, stream.tempo, stream.melody_notes, stream.beat_position
+                stream.chord, stream.tempo, stream.melody_notes, stream.beat_position, stream.intensity
             )
         elif self.mode == MODE_B_CHORDS:
-            lines = self.lines_gen.generate(
-                stream.chord, stream.tempo, stream.melody_notes, stream.beat_position
-            )
-        elif self.mode == MODE_B_VIBE:
+            # We used to do lines here, now we just do backing since we want a pad
             backing = self.accompaniment.generate(
-                stream.chord, stream.tempo, stream.melody_notes, stream.beat_position
-            )
-            lines = self.lines_gen.generate(
-                stream.chord, stream.tempo, stream.melody_notes, stream.beat_position
+                stream.chord, stream.tempo, stream.melody_notes, stream.beat_position, stream.intensity
             )
 
         duration_16ths = 4.0  # render 1 beat
@@ -135,7 +148,8 @@ class Pipeline:
         # Mono: indata shape (block_size,) or (block_size, 1)
         if indata.ndim > 1:
             indata = indata[:, 0]
-        block = indata.astype(np.float32).flatten()
+        # Flatten and clip input strictly to -1.0..1.0
+        block = np.clip(indata.astype(np.float32).flatten(), -1.0, 1.0)
 
         # Accumulate and hand off to worker when enough samples (never run perception/render here)
         self._input_accum = np.concatenate([self._input_accum, block]) if self._input_accum.size else block
@@ -188,10 +202,8 @@ class Pipeline:
             with self._lock:
                 self._accomp_index = idx + take
 
-        if outdata.ndim == 1:
-            outdata[:] = np.clip(outdata, -1.0, 1.0)
-        else:
-            outdata[:] = np.clip(outdata, -1.0, 1.0)
+        # Gentle soft-clipper instead of hard np.clip to avoid rhythmic harsh static
+        outdata[:] = np.tanh(outdata)
 
     def close(self) -> None:
         self._worker_stop.set()

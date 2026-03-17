@@ -13,9 +13,9 @@ class LinesInterface(ABC):
     """Chord/melody context -> fill/support line MIDI events."""
 
     @abstractmethod
-    def generate(self, chord: str, tempo: float, melody_notes: List[int], beat_position: float) -> List[LineEvent]:
+    def generate(self, chord: str, tempo: float, melody_notes: List[int], beat_position: float, intensity: float = 0.5) -> List[LineEvent]:
         """Generate one short phrase (fills, licks)."""
-        pass
+        return []
 
     def reset(self) -> None:
         pass

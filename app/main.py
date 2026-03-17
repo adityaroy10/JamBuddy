@@ -61,6 +61,9 @@ def main():
         pipeline = Pipeline(sample_rate=SAMPLE_RATE, block_size=BUFFER_SIZE, mode=mode_var.get())
         pipeline.set_monitor_level(monitor_var.get() / 100.0)
         pipeline.set_backing_level(backing_var.get() / 100.0)
+        
+        if use_manual_var.get():
+            pipeline.set_manual_chords(manual_chords_var.get())
         try:
             pipeline.renderer.check_backing()
         except (FileNotFoundError, OSError):
@@ -102,6 +105,18 @@ def main():
     backing_scale = ttk.Scale(mix_frame, from_=0, to=100, variable=backing_var, orient="horizontal", length=200, command=on_backing_change)
     backing_scale.pack(anchor="w", pady=(0, 8))
 
+    ttk.Separator(root, orient="horizontal").pack(fill="x", padx=12, pady=4)
+    
+    # Manual Chords
+    manual_frame = ttk.Frame(root, padding=(12, 0))
+    manual_frame.pack(fill="x", pady=4)
+    use_manual_var = tk.BooleanVar(value=False)
+    chk_manual = ttk.Checkbutton(manual_frame, text="Use Manual Progression", variable=use_manual_var)
+    chk_manual.pack(anchor="w")
+    manual_chords_var = tk.StringVar(value="C, G, Am, F")
+    entry_manual = ttk.Entry(manual_frame, textvariable=manual_chords_var, width=40)
+    entry_manual.pack(anchor="w", pady=(2, 0))
+    
     ttk.Separator(root, orient="horizontal").pack(fill="x", padx=12, pady=4)
 
     btn_start = ttk.Button(root, text="Start", command=start_stop)

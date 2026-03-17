@@ -40,15 +40,35 @@ def _chord_notes(chord: str) -> List[int]:
 
 
 class RuleBasedAccompaniment(AccompanimentInterface):
-    """Block chords with light humanization: varied velocity, longer sustain."""
+    """Block chords with rhythm patterns and dynamic intensity."""
 
-    def generate(self, chord: str, tempo: float, melody_notes: List[int], beat_position: float) -> List[ChordEvent]:
+    def generate(self, chord: str, tempo: float, melody_notes: List[int], beat_position: float, intensity: float = 0.5) -> List[ChordEvent]:
         notes = _chord_notes(chord)
-        # Sustain chord for one beat (4 16ths) so it blends; slight velocity variation per note (less robotic)
-        base_vel = 72
-        vel_range = 8   # e.g. 68–80
-        duration_16ths = 4.0
+        
+        # 1. Dynamic Intensity (velocity scaling)
+        # Intensity 0.0 -> base_vel ~ 40; 1.0 -> base_vel ~ 100
+        base_vel = int(40 + 60 * intensity)
+        vel_range = int(4 + 8 * (1.0 - intensity)) # more random variation when softer
+        
+        # 2. Rhythm Dictionaries
+        # Decide duration and articulation based on beat_position and intensity
+        beat_idx = int(beat_position) % 4
+        if intensity > 0.7:
+            # High intensity: energetic, shorter staccato chords, maybe syncopated
+            duration_16ths = 2.0 if beat_idx % 2 == 0 else 1.5
+        elif intensity < 0.3:
+            # Low intensity: soft, sparse, sustained
+            # Only play on beats 0 and 2
+            if beat_idx % 2 != 0:
+                base_vel -= 20 # play much softer on off-beats
+            duration_16ths = 8.0 
+        else:
+            # Medium intensity: standard block backing
+            duration_16ths = 4.0
+            
+        base_vel = max(10, min(127, base_vel))
+        
         return [
-            (n, base_vel + random.randint(-vel_range, vel_range), duration_16ths)
+            (n, max(10, min(127, base_vel + random.randint(-vel_range, vel_range))), duration_16ths)
             for n in notes
         ]

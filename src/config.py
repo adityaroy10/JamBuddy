@@ -17,7 +17,7 @@ INPUT_GATE_THRESHOLD = 0.01  # raise if backing still triggers on silence; lower
 
 # Backends (easy to swap for training later)
 # Use "realjam" for AI chords (ReaLchords); run realjam-start-server in another terminal. Falls back to rule-based if server unavailable.
-ACCOMPANIMENT_BACKEND = "realjam"  # "rule_based" | "realjam"
+ACCOMPANIMENT_BACKEND = "markov"  # "rule_based" | "realjam" | "markov"
 LINES_BACKEND = "rule_based"         # "rule_based" | "magenta"
 PERCEPTION_BACKEND = "lightweight"   # "lightweight" | "trained"
 
